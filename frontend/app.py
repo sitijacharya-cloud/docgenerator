@@ -190,13 +190,7 @@ if 'job_id' in st.session_state:
                 st.markdown(markdown_content)
             
             # Download button
-            st.download_button(
-                label="⬇️ Download Markdown",
-                data=markdown_content,
-                file_name=f"{project_name}_documentation.md",
-                mime="text/markdown",
-                use_container_width=True
-            )
+            
             col_dl1, col_dl2 = st.columns(2)
 
             with col_dl1:
@@ -205,7 +199,8 @@ if 'job_id' in st.session_state:
                     data=markdown_content,
                     file_name=f"{project_name}_documentation.md",
                     mime="text/markdown",
-                    use_container_width=True)
+                    use_container_width=True,
+                    key="download_markdown" )
             
             with col_dl2:
                 # Check if PDF was generated
@@ -224,9 +219,11 @@ if 'job_id' in st.session_state:
                             mime="application/pdf",
                             use_container_width=True
                             )
+                        else:
+                            st.info("PDF not available")
                     except:
                         st.info("PDF not available")
-                    else:
+                else:
                         st.info("PDF not generated (enable in options)")
 
             

@@ -30,10 +30,13 @@ _diagram_generator = None
 _pdf_generator = None
 
 
+
 def get_components():
     """Lazy initialization of components."""
+   
     global _settings, _parser, _chroma_manager, _context_builder
     global _docstring_generator, _markdown_generator, _validator
+    global _relationship_analyzer, _diagram_generator, _pdf_generator
     
     if _settings is None:
         _settings = get_settings()
@@ -76,6 +79,7 @@ def get_components():
         )
     
     if _pdf_generator is None:
+        from agents.generators.pdf_generator import PDFGenerator
         _pdf_generator = PDFGenerator()
     
     
@@ -87,9 +91,9 @@ def get_components():
         'markdown_generator': _markdown_generator,
         'validator': _validator,
         'settings': _settings,
-        'relationship_analyzer': _relationship_analyzer,  # NEW
-        'diagram_generator': _diagram_generator,          # NEW
-        'pdf_generator': _pdf_generator    
+        'relationship_analyzer': _relationship_analyzer,
+        'diagram_generator': _diagram_generator,
+        'pdf_generator': _pdf_generator
     }
 
 
@@ -310,14 +314,19 @@ def generate_markdown_node(state: DocumentationState) -> DocumentationState:
         # Add diagram if available
         mermaid_diagram = state.get('mermaid_diagram')
         if mermaid_diagram:
+            # For markdown, include mermaid syntax
             diagram_section = f"\n\n## Architecture Diagram\n\n```mermaid\n{mermaid_diagram}\n```\n\n"
-            # Insert after the first header
-            parts = markdown_content.split('\n', 3)
-            if len(parts) >= 3:
-                markdown_content = '\n'.join(parts[:3]) + diagram_section + parts[3] if len(parts) > 3 else '\n'.join(parts) + diagram_section
-            else:
-                markdown_content += diagram_section
-        
+            # Insert after title
+            lines = markdown_content.split('\n')
+            insert_index = 0
+            for i, line in enumerate(lines):
+                if line.startswith('# '):
+                    insert_index = i + 1
+                    break
+            
+            lines.insert(insert_index, diagram_section)
+            markdown_content = '\n'.join(lines)
+                
         print("✅ Markdown generation complete")
         
         return {

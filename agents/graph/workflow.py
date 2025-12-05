@@ -37,10 +37,11 @@ def create_documentation_workflow():
     workflow.add_node("extract_components", extract_components_node)
     workflow.add_node("generate_docstrings", generate_docstrings_node)
     workflow.add_node("validate", validate_docstrings_node)
-    workflow.add_node("analyze_relationships", analyze_relationships_node)  # NEW
-    workflow.add_node("generate_diagram", generate_diagram_node)            # NEW
+
+    workflow.add_node("analyze_relationships", analyze_relationships_node)
+    workflow.add_node("diagram_generation", generate_diagram_node)          # CHANGED NAME
     workflow.add_node("generate_markdown", generate_markdown_node)
-    workflow.add_node("generate_pdf", generate_pdf_node)                    # NEW
+    workflow.add_node("pdf_generation", generate_pdf_node)                  # CHANGED NAME
     workflow.add_node("save_output", save_output_node)
     
     # Define edges
@@ -55,24 +56,27 @@ def create_documentation_workflow():
         "analyze_relationships",
         should_generate_diagram,
         {
-            "generate_diagram": "generate_diagram",
+            "generate_diagram": "diagram_generation",
             "generate_markdown": "generate_markdown"
         }
     )
     
-    workflow.add_edge("generate_diagram", "generate_markdown")
+    workflow.add_edge("diagram_generation", "generate_markdown")
     
     # Conditional: generate PDF or skip
     workflow.add_conditional_edges(
         "generate_markdown",
         should_generate_pdf,
         {
-            "generate_pdf": "generate_pdf",
+            "generate_pdf": "pdf_generation",
             "save_output": "save_output"
         }
     )
     
-    workflow.add_edge("generate_pdf", "save_output")
+    workflow.add_edge("pdf_generation", "save_output")
     workflow.add_edge("save_output", END)
     
     return workflow.compile()
+    
+
+

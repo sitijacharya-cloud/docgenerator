@@ -1,161 +1,187 @@
-import markdown
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, Preformatted
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
-from html.parser import HTMLParser
-from pathlib import Path
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Preformatted
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.colors import HexColor
 import re
 
 
-class HTMLToReportLab(HTMLParser):
-    """Convert HTML to ReportLab flowables."""
-    
-    def __init__(self, styles):
-        super().__init__()
-        self.styles = styles
-        self.story = []
-        self.current_text = []
-        self.current_style = 'BodyText'
-        self.in_pre = False
-        self.in_code = False
-        self.table_data = []
-        self.current_row = []
-        self.in_table = False
-        
-    def handle_starttag(self, tag, attrs):
-        if tag == 'h1':
-            self.current_style = 'Heading1'
-        elif tag == 'h2':
-            self.current_style = 'Heading2'
-        elif tag == 'h3':
-            self.current_style = 'Heading3'
-        elif tag == 'p':
-            self.current_style = 'BodyText'
-        elif tag == 'pre':
-            self.in_pre = True
-        elif tag == 'code':
-            self.in_code = True
-        elif tag == 'table':
-            self.in_table = True
-            self.table_data = []
-        elif tag == 'tr':
-            self.current_row = []
-        elif tag in ['td', 'th']:
-            pass
-        elif tag == 'br':
-            self.current_text.append('<br/>')
-            
-    def handle_endtag(self, tag):
-        text = ''.join(self.current_text).strip()
-        
-        if tag in ['h1', 'h2', 'h3', 'p']:
-            if text:
-                self.story.append(Paragraph(text, self.styles[self.current_style]))
-                self.story.append(Spacer(1, 0.2*cm))
-            self.current_text = []
-            self.current_style = 'BodyText'
-        elif tag == 'pre':
-            if text:
-                self.story.append(Preformatted(text, self.styles['Code']))
-                self.story.append(Spacer(1, 0.3*cm))
-            self.current_text = []
-            self.in_pre = False
-        elif tag == 'code' and not self.in_pre:
-            self.in_code = False
-        elif tag == 'tr':
-            if self.current_row:
-                self.table_data.append(self.current_row)
-            self.current_row = []
-        elif tag in ['td', 'th']:
-            if text:
-                self.current_row.append(text)
-            self.current_text = []
-        elif tag == 'table':
-            if self.table_data:
-                table = Table(self.table_data)
-                table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 11),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-                ]))
-                self.story.append(table)
-                self.story.append(Spacer(1, 0.5*cm))
-            self.in_table = False
-            self.table_data = []
-            
-    def handle_data(self, data):
-        if data.strip():
-            self.current_text.append(data)
-
-
 class PDFGenerator:
-    """Generate PDF from markdown documentation."""
+    """Generate PDF from markdown documentation using ReportLab."""
     
     def __init__(self):
         self.styles = getSampleStyleSheet()
+        self._setup_custom_styles()
+    
+    def _setup_custom_styles(self):
+        """Setup custom paragraph styles."""
         
-        # Custom styles
-        self.styles.add(ParagraphStyle(
-            name='Code',
-            parent=self.styles['Code'],
+        # Check if style exists before adding
+        def add_style_if_not_exists(name, **kwargs):
+            if name not in self.styles:
+                self.styles.add(ParagraphStyle(name=name, **kwargs))
+        
+        # Title style
+        add_style_if_not_exists(
+            'CustomTitle',
+            parent=self.styles['Heading1'],
+            fontSize=24,
+            textColor=HexColor('#2c3e50'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        # Heading 2
+        add_style_if_not_exists(
+            'CustomHeading2',
+            parent=self.styles['Heading2'],
+            fontSize=18,
+            textColor=HexColor('#34495e'),
+            spaceAfter=12,
+            spaceBefore=12
+        )
+        
+        # Heading 3
+        add_style_if_not_exists(
+            'CustomHeading3',
+            parent=self.styles['Heading3'],
+            fontSize=14,
+            textColor=HexColor('#7f8c8d'),
+            spaceAfter=10,
+            spaceBefore=10
+        )
+        
+        # Code style
+        add_style_if_not_exists(
+            'CustomCode',
+            parent=self.styles['Normal'],
             fontName='Courier',
             fontSize=9,
             leftIndent=20,
-            rightIndent=20,
-            backColor=colors.HexColor('#f4f4f4'),
-            borderPadding=10,
-        ))
-        
-        # Update existing styles
-        self.styles['Heading1'].textColor = colors.HexColor('#2c3e50')
-        self.styles['Heading1'].fontSize = 24
-        self.styles['Heading1'].spaceAfter = 12
-        
-        self.styles['Heading2'].textColor = colors.HexColor('#34495e')
-        self.styles['Heading2'].fontSize = 18
-        self.styles['Heading2'].spaceAfter = 10
-        self.styles['Heading2'].spaceBefore = 20
-        
-        self.styles['Heading3'].textColor = colors.HexColor('#7f8c8d')
-        self.styles['Heading3'].fontSize = 14
-        self.styles['Heading3'].spaceAfter = 8
-    
-    def generate_pdf(self, markdown_content: str, output_path: str) -> str:
+            textColor=HexColor('#333333'),
+            backColor=HexColor('#f4f4f4')
+        )
+    def generate_pdf(self, markdown_content: str, output_path: str) -> str:  # MAKE SURE THIS IS NOT INDENTED INSIDE _setup_custom_styles
         """Generate PDF from markdown content."""
         try:
-            # Convert markdown to HTML
-            html_content = markdown.markdown(
-                markdown_content,
-                extensions=['extra', 'codehilite', 'tables', 'toc']
-            )
-            
             # Create PDF document
             doc = SimpleDocTemplate(
                 output_path,
-                pagesize=A4,
-                rightMargin=2*cm,
-                leftMargin=2*cm,
-                topMargin=2*cm,
-                bottomMargin=2*cm
+                pagesize=letter,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=72,
+                bottomMargin=18
             )
             
-            # Parse HTML and convert to ReportLab flowables
-            parser = HTMLToReportLab(self.styles)
-            parser.feed(html_content)
+            # Parse markdown and create story
+            story = self._markdown_to_story(markdown_content)
             
             # Build PDF
-            doc.build(parser.story)
+            doc.build(story)
             
             return output_path
             
         except Exception as e:
             print(f"Error generating PDF: {e}")
             raise
+
+    
+    
+    def _markdown_to_story(self, markdown_content: str):
+        """Convert markdown to ReportLab story."""
+        story = []
+        lines = markdown_content.split('\n')
+        
+        in_code_block = False
+        is_mermaid = False 
+        code_lines = []
+        
+        for line in lines:
+            # Check for code blocks
+            if line.strip().startswith('```'):
+                if in_code_block:
+                    # End of code block
+                    if code_lines and not is_mermaid:
+                        code_text = '\n'.join(code_lines)
+                        story.append(Preformatted(code_text, self.styles['CustomCode']))
+                        story.append(Spacer(1, 0.2 * inch))
+                    elif is_mermaid:
+                        # Add note about diagram instead of code
+                        story.append(Paragraph(
+                            "<i>Note: Architecture diagram available in markdown version</i>",
+                            self.styles['Normal']
+                        ))
+                        story.append(Spacer(1, 0.2 * inch))
+                    code_lines = []
+                    in_code_block = False
+                    is_mermaid = False
+                else:
+                    # Start of code block
+                    in_code_block = True
+                    # Check if it's a mermaid diagram
+                    is_mermaid = 'mermaid' in line.lower()
+                continue
+                        
+            if in_code_block:
+                code_lines.append(line)
+                continue
+            
+            # Skip empty lines
+            if not line.strip():
+                story.append(Spacer(1, 0.1 * inch))
+                continue
+            
+            # Clean the line first
+            clean_line = line.strip()
+            
+            # Headers
+            if clean_line.startswith('# '):
+                text = self._clean_text(clean_line[2:])
+                story.append(Paragraph(text, self.styles['CustomTitle']))
+                story.append(Spacer(1, 0.2 * inch))
+            
+            elif clean_line.startswith('## '):
+                text = self._clean_text(clean_line[3:])
+                story.append(Paragraph(text, self.styles['CustomHeading2']))
+                story.append(Spacer(1, 0.1 * inch))
+            
+            elif clean_line.startswith('### '):
+                text = self._clean_text(clean_line[4:])
+                story.append(Paragraph(text, self.styles['CustomHeading3']))
+                story.append(Spacer(1, 0.1 * inch))
+            
+            # List items
+            elif clean_line.startswith('- ') or clean_line.startswith('* '):
+                text = '• ' + self._clean_text(clean_line[2:])
+                story.append(Paragraph(text, self.styles['Normal']))
+            
+            # Regular paragraph
+            else:
+                text = self._clean_text(clean_line)
+                if text:
+                    story.append(Paragraph(text, self.styles['Normal']))
+        
+        return story
+
+    def _clean_text(self, text: str) -> str:
+        """Clean and escape text for ReportLab."""
+        if not text:
+            return ""
+        
+        # Remove markdown formatting
+        text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)  # Bold
+        text = re.sub(r'\*(.+?)\*', r'<i>\1</i>', text)      # Italic
+        text = re.sub(r'`([^`]+)`', r'<font name="Courier">\1</font>', text)  # Inline code
+        
+        # Escape special characters (but not our HTML tags)
+        text = re.sub(r'&(?!amp;|lt;|gt;|quot;)', '&amp;', text)
+        text = text.replace('<', '&lt;').replace('>', '&gt;')
+        
+        # Restore our HTML tags
+        text = text.replace('&lt;b&gt;', '<b>').replace('&lt;/b&gt;', '</b>')
+        text = text.replace('&lt;i&gt;', '<i>').replace('&lt;/i&gt;', '</i>')
+        text = text.replace('&lt;font name="Courier"&gt;', '<font name="Courier">').replace('&lt;/font&gt;', '</font>')
+        
+        return text
