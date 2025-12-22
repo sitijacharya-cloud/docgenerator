@@ -1,0 +1,139 @@
+import uuid
+from datetime import datetime
+from typing import List, Dict, Optional
+
+
+# -----------------------------
+# Models
+# -----------------------------
+
+class User:
+    def __init__(self, name: str, email: str):
+        self.id = str(uuid.uuid4())
+        self.name = name
+        self.email = email
+        self.created_at = datetime.now()
+
+    def update_email(self, new_email: str):
+        self.email = new_email
+
+    def deactivate(self):
+        self.active = False
+
+
+class Admin(User):
+    def __init__(self, name: str, email: str, role: str = "admin"):
+        super().__init__(name, email)
+        self.role = role
+
+    def ban_user(self, user: "User"):
+        user.active = False
+
+    def promote_to_admin(self, user: "User") -> "Admin":
+        return Admin(user.name, user.email)
+
+
+class Project:
+    def __init__(self, title: str, owner: User):
+        self.id = str(uuid.uuid4())
+        self.title = title
+        self.owner = owner
+        self.tasks: List["Task"] = []
+        self.created_at = datetime.now()
+
+    def add_task(self, task: "Task"):
+        self.tasks.append(task)
+
+    def get_completed_tasks(self) -> List["Task"]:
+        return [t for t in self.tasks if t.completed]
+
+    def get_pending_tasks(self) -> List["Task"]:
+        return [t for t in self.tasks if not t.completed]
+
+
+class Task:
+    def __init__(self, title: str, assigned_to: Optional[User] = None):
+        self.id = str(uuid.uuid4())
+        self.title = title
+        self.assigned_to = assigned_to
+        self.completed = False
+        self.created_at = datetime.now()
+
+    def assign(self, user: User):
+        self.assigned_to = user
+
+    def mark_completed(self):
+        self.completed = True
+
+
+# -----------------------------
+# Services
+# -----------------------------
+
+class NotificationService:
+    def __init__(self):
+        self.notifications_sent = 0
+
+    def send_email(self, user: User, message: str):
+        self.notifications_sent += 1
+
+    def broadcast(self, users: List[User], message: str):
+        for user in users:
+            self.send_email(user, message)
+
+
+class ProjectService:
+    def __init__(self, notification_service: NotificationService):
+        self.projects: Dict[str, Project] = {}
+        self.notification_service = notification_service
+
+    def create_project(self, title: str, owner: User) -> Project:
+        project = Project(title, owner)
+        self.projects[project.id] = project
+        self.notification_service.send_email(owner, f"Project '{title}' created.")
+        return project
+
+    def assign_task(self, project_id: str, task: Task, user: User):
+        project = self.projects.get(project_id)
+        if project:
+            task.assign(user)
+            project.add_task(task)
+            self.notification_service.send_email(user, f"You were assigned a task: {task.title}")
+
+    def complete_task(self, project_id: str, task_id: str):
+        project = self.projects.get(project_id)
+        if project:
+            task = next((t for t in project.tasks if t.id == task_id), None)
+            if task:
+                task.mark_completed()
+                if task.assigned_to:
+                    self.notification_service.send_email(task.assigned_to, f"Task '{task.title}' completed.")
+
+
+# -----------------------------
+# Utility Functions
+# -----------------------------
+
+
+
+# -----------------------------
+# Main Execution Logic
+# -----------------------------
+
+def main():
+    data = generate_sample_data()
+    project = data["project"]
+    service: ProjectService = data["service"]
+
+    for task in project.tasks:
+        service.complete_task(project.id, task.id)
+
+    owner = project.owner
+    print("Project:", project.title)
+    print("Owner:", owner.name)
+    print("Total Tasks:", len(project.tasks))
+    print("Completed:", len(project.get_completed_tasks()))
+
+
+if __name__ == "__main__":
+    main()

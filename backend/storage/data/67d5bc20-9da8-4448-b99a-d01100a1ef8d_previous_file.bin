@@ -1,0 +1,96 @@
+
+
+# ========== FILE: service.py ==========
+
+# services/auth_service.py
+
+import hashlib
+
+
+class AuthService:
+    """
+    Provides authentication utilities for password hashing and verification.
+    Used by User class in models/user.py.
+    """
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash a password using SHA256."""
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    @staticmethod
+    def verify_password(password: str, hashed: str) -> bool:
+        """Verify a password by comparing hashes."""
+        return AuthService.hash_password(password) == hashed
+
+
+class TokenService:
+    """
+    New class added to test multi-file class detection.
+    Generates and validates tokens.
+    """
+
+    SECRET = "XYZ123"
+
+    @staticmethod
+    def generate_token(username: str) -> str:
+        """Create a simple pseudo token."""
+        raw = f"{username}:{TokenService.SECRET}"
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    @staticmethod
+    def validate_token(username: str, token: str) -> bool:
+        """Validate a pseudo token."""
+        expected = TokenService.generate_token(username)
+        return expected == token
+
+
+# ========== FILE: user.py ==========
+
+# models/user.py
+
+from datetime import datetime
+from services.auth_service import AuthService
+
+
+def timestamped(func):
+    """Decorator that prints a timestamp before running a function."""
+    def wrapper(*args, **kwargs):
+        print(f"[{datetime.now()}] Executing: {func.__name__}")
+        return func(*args, **kwargs)
+    return wrapper
+
+
+class BaseModel:
+    """Base class for all models."""
+
+    def save(self):
+        """Simulate saving the model."""
+        return f"{self.__class__.__name__} saved."
+
+
+class User(BaseModel):
+    """
+    Represents a user in the system.
+    Inherits from BaseModel.
+    Uses AuthService (from file 2) for password hashing and verification.
+    """
+
+    def __init__(self, username: str, password: str):
+        self.username = username
+        self.password_hash = AuthService.hash_password(password)
+
+    @timestamped
+    def verify_password(self, password: str) -> bool:
+        """Verify user password using AuthService."""
+        return AuthService.verify_password(password, self.password_hash)
+
+    @staticmethod
+    def is_valid_username(username: str) -> bool:
+        """Static validator for username rules."""
+        return len(username) >= 4
+
+    @classmethod
+    def create_guest(cls):
+        """Create a guest user with default values."""
+        return cls("guest", "guest123")
